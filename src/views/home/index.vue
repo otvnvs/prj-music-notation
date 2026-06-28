@@ -4,25 +4,90 @@
       <h2 class="app-title">Komponeerder</h2>
     </div>
 
-    <!-- PRIMARY ACTION DECK -->
-    <div class="top-action-bar">
-      <button class="btn btn-generate" @click="appendGeneratedMeasure">
-        Voeg maat by
-      </button>
-      <button class="btn btn-remove-bar" @click="removeLastMeasure">
-        Verwyder maat
-      </button>
-      <button class="btn btn-clear-score" @click="clearScore">
-        Wis partituur
-      </button>
-      <button class="btn btn-refresh" @click="refreshPage">
-        Herlaai
-      </button>
-    </div>
+	<div class="control-row">
+	  <!-- Rewind to Beginning (Triggers via Alt + B) -->
+	  <button class="btn btn-audio" @click="rewindScore" title="Rewind to Beginning [&h]">
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+    <path d="M4 6h2v12H4V6zm4 0h2v12H8V6zm12 12l-8.5-6 8.5-6v12z"/>
+  </svg>
+
+	  </button>
+
+	  <!-- Back 1 Measure (Triggers via Alt + V) -->
+	  <button class="btn btn-audio" @click="backMeasure" title="Back 1 Measure [&j]">
+<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+  <!-- Left Bar 1 followed by a Left-Facing Triangle -->
+  <path d="M6 6h2v12H6V6zm12 12l-8.5-6 8.5-6v12z"/>
+</svg>
+	  </button>
+
+	<!-- Play State (Triggers via Alt + K) -->
+	<button v-if="!playerState.isPlaying || playerState.isPaused" class="btn btn-audio btn-play" @click="togglePlay" title="Play [&k]">
+	  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+	    <path d="M8 5v14l11-7z"/>
+	  </svg>
+	</button>
+	<button v-else class="btn btn-audio btn-pause" @click="togglePlay" title="Pause [&k]">
+	  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+	    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+	  </svg>
+	</button>
+
+	  <!-- Forward 1 Measure (Triggers via Alt + M) -->
+	  <button class="btn btn-audio" @click="forwardMeasure" title="Forward 1 Measure [&l]">
+	    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+	      <path d="M6 18l8.5-6L6 6v12zM16 6h2v12h-2V6z"/>
+	    </svg>
+	  </button>
+
+	  <!-- Forward 1 Measure (Triggers via Alt + M) -->
+	  <button class="btn btn-audio" @click="forwardMeasure" title="Forward 1 Measure [&;]">
+
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+    <path d="M4 6l8.5 6L4 18V6zm10 0h2v12h-2V6zm4 0h2v12h-2V6z"/>
+  </svg>
+	  </button>
+
+	</div>
+
     
     <div class="canvas-wrapper" ref="scrollContainer">
       <div id="output" ref="canvasTarget"></div>
     </div>
+
+
+<!-- PRIMARY ACTION DECK -->
+<div class="control-row">
+  <!-- Add New Measure (Triggers via Alt + m) -->
+  <button class="btn btn-control btn-add-bar" @click="appendGeneratedMeasure" title="Voeg by [&m]">
+    <!-- Increased thickness using stroke and scaled up size via a 22px viewport -->
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linecap="round">
+      <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+    </svg>
+  </button>
+
+  <!-- Remove Last Measure (Triggers via Alt + ,) -->
+  <button class="btn btn-control btn-remove-bar" @click="removeLastMeasure" title="Verwyder [&,]">
+    <!-- Reduced visual presence by lowering the width and height to 17px -->
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor">
+      <path d="M22 3H7c-.69 0-1.23.35-1.59.88L0 12l5.41 8.11c.36.53.9.89 1.59.89h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-3 12.59L17.59 17 14 13.41 10.41 17 9 15.59 12.59 12 9 8.41 10.41 7 14 10.59 17.59 7 19 8.41 15.41 12 19 15.59z"/>
+    </svg>
+  </button>
+
+  <!-- Wipe Score / Clear (Triggers via Alt + .) -->
+  <button class="btn btn-control btn-clear-score" @click="clearScore" title="Wis [&.]">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+      <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+    </svg>
+  </button>
+
+  <!-- Reload Page / Refresh (Triggers via Alt + /) -->
+  <button class="btn btn-control btn-refresh" @click="refreshPage" title="Herlaai [&/]">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+      <path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+    </svg>
+  </button>
+</div>
 
     <div class="mic-status-banner">
       <button 
@@ -88,20 +153,7 @@
         </div>
       </div>
 
-      <div class="audio-control-row">
-        <button class="btn btn-audio" @click="backMeasure" title="Back 1 Measure">Vorige Maat</button>
-        <button class="btn btn-audio" @click="rewindScore" title="Rewind to Beginning">Begin</button>
-        
-        <button v-if="!playerState.isPlaying || playerState.isPaused" class="btn btn-audio btn-play" @click="togglePlay">
-          Speel
-        </button>
-        <button v-else class="btn btn-audio btn-pause" @click="togglePlay">
-          Stop
-        </button>
-        
-        <button class="btn btn-audio" @click="stopScore" title="Stop Playback">Stop</button>
-        <button class="btn btn-audio" @click="forwardMeasure" title="Forward 1 Measure">Volgende Maat</button>
-      </div>
+
     </div>
   </div>
 </template>
@@ -109,7 +161,7 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import VexFlow from '../..//lib/composer/vexflow.js';
-import { ScorePlayer } from '../../lib/composer/play.js';
+import { ScorePlayer } from '../../lib/composer/play/index.js';
 import { MicrophoneController } from '../../lib/composer/microphone_control.js';
 import { generateMeasure } from '../../lib/composer/generate.js';
 
@@ -320,5 +372,5 @@ watch(() => [playerState.currentMeasureIdx, playerState.currentNoteIdx], () => {
 renderScore();});
 </script>
 <style>
-@import "./src/apps/composer/style.css";
+@import "src/style.css";
 </style>

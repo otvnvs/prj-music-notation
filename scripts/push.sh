@@ -94,7 +94,7 @@ done
 # 3. Channel 2: Push required source and asset directories directly
 echo "Pushing target directories (src, public, dist)..."
 $ADB push "src" "$TARGET_DIR/www/src" > /dev/null
-$ADB push "public" "$TARGET_DIR/www/public" > /dev/null
+#$ADB push "public" "$TARGET_DIR/www/public" > /dev/null
 $ADB push "dist" "$TARGET_DIR/www/dist" > /dev/null
 
 # 4. Securely copy everything into the sandbox
