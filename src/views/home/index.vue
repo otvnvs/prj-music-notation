@@ -527,7 +527,6 @@ const onChangeStrategy=()=>{
 //--------------------------------------------------------------------------------
 </script>
 <style>
-@import "src/style.css";
 :root {
   --bg-main: #0f172a;
   --bg-card: #1e293b;
