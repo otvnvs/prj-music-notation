@@ -204,47 +204,49 @@
 //  }
 //}
 //--------------------------------------------------------------------------------
-import { Organ } from '../synth/organ.js';
-import { Pluck } from '../synth/pluck.js';
+import { Organ as DEFAULT_SYNTH } from '../synth/organ.js';
+//import { Pluck } from '../synth/pluck.js';
+//import { Vangelis as DEFAULT_SYNTH } from '../synth/vangelis.js';
+//import { Harpsichord as DEFAULT_SYNTH } from '../synth/harpsichord.js';
 
+//const DEFAULT_SYNTH=Vangelis;
 
 /**
  * Default Synth Instrument
  * Baseline safe-fallback synthesizer rendering a pure triangle waveform.
  */
-class DefaultSynth {
-  constructor() {
-    this.name = 'Default Synth';
-  }
+//class DefaultSynth {
+//  constructor() {
+//    this.name = 'Default Synth';
+//  }
+//
+//  /**
+//   * Triggers a simple triangle tone
+//   * @param {AudioContext} ctx 
+//   * @param {number} freq 
+//   * @param {number} startTime 
+//   * @param {number} duration 
+//   */
+//  triggerZone(ctx, freq, startTime, duration) {
+//    const osc = ctx.createOscillator();
+//    const gain = ctx.createGain();
+//    
+//    osc.type = 'triangle';
+//    osc.frequency.setValueAtTime(freq, startTime);
+//    
+//    gain.gain.setValueAtTime(0, startTime);
+//    gain.gain.linearRampToValueAtTime(0.25, startTime + 0.01);
+//    gain.gain.setValueAtTime(0.25, startTime + duration - 0.04);
+//    gain.gain.linearRampToValueAtTime(0, startTime + duration);
+//    
+//    osc.connect(gain);
+//    gain.connect(ctx.destination);
+//    
+//    osc.start(startTime);
+//    osc.stop(startTime + duration);
+//  }
+//}
 
-  /**
-   * Triggers a simple triangle tone
-   * @param {AudioContext} ctx 
-   * @param {number} freq 
-   * @param {number} startTime 
-   * @param {number} duration 
-   */
-  triggerZone(ctx, freq, startTime, duration) {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(freq, startTime);
-    
-    gain.gain.setValueAtTime(0, startTime);
-    gain.gain.linearRampToValueAtTime(0.25, startTime + 0.01);
-    gain.gain.setValueAtTime(0.25, startTime + duration - 0.04);
-    gain.gain.linearRampToValueAtTime(0, startTime + duration);
-    
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    
-    osc.start(startTime);
-    osc.stop(startTime + duration);
-  }
-}
-
-const DEFAULT_SYNTH=Organ;//DefaultSynth;
 
 
 /**

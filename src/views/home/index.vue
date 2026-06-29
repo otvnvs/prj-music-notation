@@ -4,6 +4,7 @@
       <h2 class="app-title">Komponeerder</h2>
     </div>
 
+
 	<div class="control-row">
 	  <!-- Rewind to Beginning (Triggers via Alt + B) -->
 	  <button class="btn btn-audio" @click="rewindScore" title="Rewind to Beginning [&h]">
@@ -58,13 +59,44 @@
 
 <!-- PRIMARY ACTION DECK -->
 <div class="control-row">
-  <!-- Add New Measure (Triggers via Alt + m) -->
+<!--
   <button class="btn btn-control btn-add-bar" @click="appendGeneratedMeasure" title="Voeg by [&m]">
-    <!-- Increased thickness using stroke and scaled up size via a 22px viewport -->
     <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linecap="round">
       <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
     </svg>
   </button>
+-->
+<!-- SPLIT GENERATE BUTTON -->
+<div class="split-btn-group" v-click-outside="closeDropdown">
+  <!-- Main Action Part -->
+  <button class="btn btn-control btn-add-bar" @click="appendGeneratedMeasure" :title="`Voeg by met ${selectedGeneratorVersion} [&m]`">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linecap="round">
+      <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+    </svg>
+  </button>
+  
+  <!-- Dropdown Trigger Part -->
+  <button class="btn btn-control btn-dropdown-trigger" @click="toggleDropdown" title="Kies algoritme">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+      <path d="M7 10l5 5 5-5H7z"/>
+    </svg>
+  </button>
+
+  <!-- Floating Menu Panel -->
+  <div v-if="isDropdownOpen" class="generator-menu-panel">
+    <button class="menu-item" :class="{ active: selectedGeneratorVersion === 'default' }" @click="selectVersion('default')">
+      Standaard
+    </button>
+    <button class="menu-item" :class="{ active: selectedGeneratorVersion === 'v1' }" @click="selectVersion('v1')">
+      Model 1
+    </button>
+    <button class="menu-item" :class="{ active: selectedGeneratorVersion === 'v2' }" @click="selectVersion('v2')">
+      Model 2
+    </button>
+  </div>
+</div>
+
+
 
   <!-- Remove Last Measure (Triggers via Alt + ,) -->
   <button class="btn btn-control btn-remove-bar" @click="removeLastMeasure" title="Verwyder [&,]">
@@ -87,7 +119,59 @@
       <path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
     </svg>
   </button>
+
+
+
+
+
+
+
+
+<!--
+<button class="btn btn-control btn-layout" @click="toggleLayout" title="Verander uitleg">
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+    <path d="M4 11h5V5H4v6zm0 8h5v-6H4v6zm7 0h9v-6h-9v6zm0-14v6h9V5h-9z"/>
+  </svg>
+</button>
+      <label for="layout-strategy" class="toolbar-label">Layout Engine:</label>
+      <select 
+        id="layout-strategy" 
+        v-model="currentStrategy" 
+        @change="onChangeStrategy"
+        class="dropdown-select"
+      >
+        <option value="default">Default (Uniform Width Spaces)</option>
+        <option value="proportional">Proportional (Advanced Logarithmic)</option>
+      </select>
+-->
+
 </div>
+    <!-- Unified Controller Bar -->
+    <div class="controls-row">
+      <div class="selector-field-group">
+        <label for="layout-strategy" class="field-heading">Layout Engine:</label>
+        
+        <!-- Wrap in a relative container to overlay a custom arrow indicator icon -->
+        <div class="select-wrapper">
+          <select 
+            id="layout-strategy" 
+            v-model="currentStrategy" 
+            @change="onChangeStrategy"
+            class="custom-select-input"
+          >
+            <option value="default">Standaard</option>
+            <option value="proportional">Logaritmies</option>
+          </select>
+          <span class="select-chevron">▼</span>
+        </div>
+      </div>
+    </div>
+
+
+
+
+
+
 
     <div class="mic-status-banner">
       <button 
@@ -132,8 +216,9 @@
             id="tempo-input" 
             v-model.number="bpmValue" 
             type="range" 
-            min="40" 
-            max="240" 
+            min="10" 
+            max="1000" 
+            default="120" 
             step="5" 
             class="tempo-slider"
           />
@@ -160,14 +245,16 @@
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue';
-import VexFlow from '../..//lib/composer/vexflow.js';
+import VexFlow from '../..//lib/composer/vexflow/index.js';
 import { ScorePlayer } from '../../lib/composer/play/index.js';
 import { MicrophoneController } from '../../lib/composer/microphone_control.js';
-import { generateMeasure } from '../../lib/composer/generate.js';
+import { generateMeasure } from '../../lib/composer/generator/index.js';
 
 const canvasTarget = ref(null);
 const scrollContainer = ref(null);
 const screenWidth = ref(window.innerWidth);
+
+const currentStrategy = ref('proportional');
 
 const audioPlayer = new ScorePlayer();
 let micController = null;
@@ -184,7 +271,8 @@ const playerState = reactive({
   totalMeasures: 0
 });
 
-const voice1Text = ref('C4/q, E4, G4, B4 | C5/h, G4/h | A4/q, B4, C5, D5 | E5/w');
+//const voice1Text = ref('C4/q, E4, G4, B4 | C5/h, G4/h | A4/q, B4, C5, D5 | E5/w');
+const voice1Text = ref('C4/q, D4#b/q, R/q, E4/e., F4/16 | G4/16, A4/16, B4/16, C5/16, R/e, R/e, G4/h | Bb4/w');
 
 const toggleMicrophoneControl = async () => {
   if (isMicListening.value) {
@@ -267,25 +355,48 @@ const scrollToActiveMeasureRow = (measureIdx) => {
   const targetScrollTop = (targetRow * 90) + 45 - 110;
   scrollContainer.value.scrollTo({
     top: Math.max(0, targetScrollTop),
-    behavior: 'smooth'
+    //behavior: 'smooth'
   });
 };
 
+
+//single generator version
+//const appendGeneratedMeasure = () => {
+//  const cleanText = voice1Text.value.trim();
+//  const generatedStr = generateMeasure(cleanText);
+//  
+//  if (!cleanText || cleanText === 'C4/w') {
+//    voice1Text.value = generatedStr;
+//  } else {
+//    voice1Text.value = `${cleanText} | ${generatedStr}`;
+//  }
+//
+//  nextTick(() => {
+//    const totalMeasures = voice1Text.value.split('|').length;
+//    scrollToActiveMeasureRow(totalMeasures - 1);
+//  });
+//};
+//multi generator version
 const appendGeneratedMeasure = () => {
   const cleanText = voice1Text.value.trim();
-  const generatedStr = generateMeasure(cleanText);
+  
+  // Forward selected state through option parameters
+  const generatedStr = generateMeasure(cleanText, { 
+    version: selectedGeneratorVersion.value 
+  });
   
   if (!cleanText || cleanText === 'C4/w') {
     voice1Text.value = generatedStr;
   } else {
-    voice1Text.value = `${cleanText} | ${generatedStr}`;
+    voice1Text.value = `${cleanText}|${generatedStr}`;
   }
-
+  
   nextTick(() => {
     const totalMeasures = voice1Text.value.split('|').length;
     scrollToActiveMeasureRow(totalMeasures - 1);
   });
 };
+
 
 const removeLastMeasure = () => {
   const cleanText = voice1Text.value.trim();
@@ -326,7 +437,9 @@ const renderScore = () => {
   const factory = new VexFlow.Factory({
     renderer: { elementId: canvasTarget.value, width: computedWidth, height: 120 },
     activeMeasureIdx: playerState.currentMeasureIdx,
-    activeNoteIdx: playerState.currentNoteIdx - 1
+    activeNoteIdx: playerState.currentNoteIdx - 1,
+    layoutStrategy: currentStrategy.value,
+
   });
   const score = factory.EasyScore();
   const system = factory.System();
@@ -370,6 +483,48 @@ watch(isLoopEnabled, (newLoopVal) => {
 
 watch(() => [playerState.currentMeasureIdx, playerState.currentNoteIdx], () => {
 renderScore();});
+
+
+//--------------------------------------------------------------------------------
+//pick generator
+//--------------------------------------------------------------------------------
+// State variables for engine picking
+const selectedGeneratorVersion = ref('default');
+const isDropdownOpen = ref(false);
+
+// Action triggers
+const toggleDropdown = () => {
+  isDropdownOpen.value = !isDropdownOpen.value;
+};
+
+const closeDropdown = () => {
+  isDropdownOpen.value = false;
+};
+
+const selectVersion = (versionName) => {
+  selectedGeneratorVersion.value = versionName;
+  isDropdownOpen.value = false;
+};
+
+// Custom directive definition to close dropdown on outer page click
+const vClickOutside = {
+  mounted(el, binding) {
+    el.clickOutsideEvent = (event) => {
+      if (!(el === event.target || el.contains(event.target))) {
+        binding.value();
+      }
+    };
+    document.addEventListener("click", el.clickOutsideEvent);
+  },
+  unmounted(el) {
+    document.removeEventListener("click", el.clickOutsideEvent);
+  }
+};
+//--------------------------------------------------------------------------------
+const onChangeStrategy=()=>{
+  renderScore(); 
+}
+//--------------------------------------------------------------------------------
 </script>
 <style>
 @import "src/style.css";
@@ -841,5 +996,161 @@ body {
 	height:840px!important;
 	scale:0.9;
 }
+/* -------------------------------------------------------------------------------- */
+/* generator picking */
+/* -------------------------------------------------------------------------------- */
+/* Split layout container context */
+.split-btn-group {
+  position: relative;
+  display: flex;
+  grid-column: span 1; /* Retains grid index alignments */
+border-radius:0px;
+}
+
+/* Adjust target buttons inside the split structure */
+.split-btn-group .btn-add-bar {
+  flex: 1;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: none;
+border-top-right-radius:0px;
+border-bottom-right-radius:0px;
+  border-right:0px!important;
+}
+
+.btn-dropdown-trigger {
+  width: 32px;
+  padding: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  background: #1e293b;
+  border: 1px solid #475569;
+  color: var(--text-primary);
+  border-top-left-radius:0px!important;
+  border-bottom-left-radius:0px!important;
+  border-left:0px!important;
+}
+
+.btn-dropdown-trigger:hover {
+  background: #334155;
+  border-color: var(--accent-blue);
+}
+
+/* Floating engine selector menu alignment */
+.generator-menu-panel {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  
+  /* CHANGE THIS: From right: 0; to left: 0; */
+  left: 0; 
+  
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: var(--border-radius-md);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  z-index: 50;
+  overflow: hidden;
+}
+
+.menu-item {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.menu-item:hover {
+  background: #334155;
+  color: var(--text-primary);
+}
+
+.menu-item.active {
+  color: var(--accent-blue);
+  background: rgba(56, 189, 248, 0.08);
+}
+
+/* -------------------------------------------------------------------------------- */
+/* layout engine */
+/* -------------------------------------------------------------------------------- */
+
+.selector-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field-heading {
+  font-size: 0.75rem;
+  color: #94a3b8; /* Faded secondary label color */
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Position context wrapper for handling custom icon alignment layouts */
+.select-wrapper {
+  position: relative;
+  display: inline-block;
+  min-width: 280px;
+}
+
+/* The styled input control element */
+.custom-select-input {
+  width: 100%;
+  appearance: none; /* Strips out default browser styling */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  
+  background: #1e293b; /* Matches menu panel colors */
+  border: 1px solid #475569; /* Matches split button borders */
+  border-radius: 4px;
+  color: #ffffff; /* Primary light text color */
+  
+  padding: 10px 36px 10px 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Interactive pseudo-states mirroring your image layout design details */
+.custom-select-input:hover {
+  background: #243146;
+  border-color: #38bdf8; /* Accent light blue color shift */
+}
+
+.custom-select-input:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
+}
+
+/* Styling the nested native dropdown options window list */
+.custom-select-input option {
+  background: #1e293b;
+  color: #e2e8f0;
+  font-weight: 600;
+  padding: 12px;
+}
+
+/* Overlaying an absolute-positioned dark chevron arrow signifier */
+.select-chevron {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  font-size: 0.65rem;
+  pointer-events: none; /* Allows clicks to pass directly through to the select input beneath */
+}
+
 /* -------------------------------------------------------------------------------- */
 </style>

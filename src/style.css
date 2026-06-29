@@ -20,7 +20,7 @@ body {
 }
 
 .notation-container {
-  max-width: 660px;
+  max-width: 100%;/*660px;*/
   margin: 40px auto;
   padding: 32px;
   background: var(--bg-card);
