@@ -365,18 +365,33 @@ export class ScorePlayer {
   /**
    * Dynamically recalibrates note step profiles when target BPM drifts.
    */
-  reloadDurationsOnly() {
-    const beatDuration = 60 / this.bpm;
-    this.measures.forEach(m => {
-      m.forEach(note => {
-        if (note.durToken === 'w') note.seconds = beatDuration * 4;
-        else if (note.durToken === 'h') note.seconds = beatDuration * 2;
-        else if (note.durToken === 'e') note.seconds = beatDuration * 0.5;
-        else note.seconds = beatDuration; // default 'q'
-      });
-    });
-  }
 
+  
+  
+ reloadDurationsOnly() {
+  const beatDuration = 60 / this.bpm;
+  this.measures.forEach(m => {
+    m.forEach(note => {
+      if (note.durToken === 'w') {
+        note.seconds = beatDuration * 4;
+      } else if (note.durToken === 'h') {
+        note.seconds = beatDuration * 2;
+      } else if (note.durToken === 'e') {
+        note.seconds = beatDuration * 0.5;
+      } else if (note.durToken === '16') {
+        note.seconds = beatDuration * 0.25;  // 4 notes per beat
+      } else if (note.durToken === '32') {
+        note.seconds = beatDuration * 0.125; // 8 notes per beat
+      } else {
+        note.seconds = beatDuration;         // default 'q'
+      }
+    });
+  });
+}
+
+  
+  
+  
   /**
    * Initiates scheduler intervals or unpauses sleeping setups.
    * @param {Function} onStateChange - Realtime telemetry updates distribution channel.

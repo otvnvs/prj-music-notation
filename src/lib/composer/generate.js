@@ -1,28 +1,43 @@
-// Absolute MIDI Pitch Mapping (Added Bb for explicit flat tracking)
+// Absolute MIDI Pitch Mapping
 const PITCHES = { C: 60, D: 62, E: 64, F: 65, G: 67, A: 69, B: 71, Bb: 70 };
 
 // Separate arrays for sharp-spelled keys and flat-spelled keys
 const ALPHABET_SHARPS = Array('C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B');
 const ALPHABET_FLATS  = Array('C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B');
 
-// Rhythmic Duration Blueprints for 4/4 Common Time
-const RHYTHMS = Array(
-  Array('q', 'q', 'q', 'q'),
+// 1. POOL OF SLOW BLUEPRINTS (Adagio Section / Broad Notes)
+const RHYTHMS_SLOW = Array(
   Array('h', 'h'),
-  Array('q', 'e', 'e', 'q', 'q'),
-  Array('e', 'e', 'q', 'e', 'e', 'q'),
   Array('q', 'q', 'h'),
   Array('h', 'q', 'q'),
-  Array('e', 'e', 'e', 'e', 'q', 'q'),
-  Array('q', 'e', 'e', 'e', 'e', 'e', 'e'),
-  Array('h', 'e', 'e', 'e', 'e')
+  Array('q', 'q', 'q', 'q')
 );
+
+// 2. POOL OF FAST BLUEPRINTS (Presto Section / Virtuosic Runs)
+const RHYTHMS_FAST = Array(
+  Array('16', '16', '16', '16', '16', '16', '16', '16', '16', '16', '16', '16', '16', '16', '16', '16'), // Pure 16th engine
+  Array('e', 'e', '32', '32', '32', '32', '32', '32', '32', '32', 'e', 'e', '16', '16', '16', '16'),    // Rapid bursts
+  Array('16', '16', '16', '16', '32', '32', '32', '32', '32', '32', '32', '32', 'e', 'e', 'e', 'e'),    // Decelerating run
+  Array('e', '16', '16', 'e', '16', '16', '16', '16', '16', '16', '32', '32', '32', '32', 'e')          // Unstable division engine
+);
+
+// 3. POOL OF BALANCED BLUEPRINTS (Exposition Section / Structural Theme)
+const RHYTHMS_BALANCED = Array(
+  Array('e', '16', '16', 'e', 'e', '16', '16', 'q'),
+  Array('q', 'e', '16', '16', 'h'),
+  Array('16', '16', '16', '16', 'e', 'e', 'q'),
+  Array('e', 'e', '16', '16', '16', '16', 'h')
+);
+
+// PERSISTENT SCOPE STATE: Tracks structural memory across measures
+let storedMotifRhythm = null;
+let storedMotifDegrees = null;
 
 export function generateMeasure(currentScore) {
   let lastMidi = 60;
   let totalMeasures = 0;
 
-  // Step 1: Parse the final trailing note to establish voice-leading continuity
+  // Step 1: Parse historical score tracking context
   if (currentScore && currentScore.trim().length > 0) {
     const bars = currentScore.split('|').map(b => b.trim());
     totalMeasures = bars.length;
@@ -37,7 +52,6 @@ export function generateMeasure(currentScore) {
         const acc = match.at(2) || '';
         const octave = parseInt(match.at(3), 10);
         
-        // Handle incoming primary note parsing safely
         if (PITCHES[letter] !== undefined) {
           lastMidi = PITCHES[letter] + (octave - 4) * 12;
           if (acc === '#') lastMidi += 1;
@@ -45,80 +59,155 @@ export function generateMeasure(currentScore) {
         }
       }
     }
+  } else {
+    // Reset core memory banks if starting fresh
+    storedMotifRhythm = null;
+    storedMotifDegrees = null;
   }
 
-  // Step 2: Modulatory Logic cycling balanced sharp and flat keys (Max 2 accidentals)
+  // Step 2: Modulatory Axis
   let keyCenter = 'C';
   let isMinor = false;
-  let useFlats = false; // Flag to change spelling array layout dynamically
+  let useFlats = false;
   
   const modCycle = Math.floor(totalMeasures / 2) % 8;
   switch (modCycle) {
-    case 1: keyCenter = 'G';  isMinor = false; useFlats = false; break; // G Major (1 Sharp)
-    case 2: keyCenter = 'F';  isMinor = false; useFlats = true;  break; // F Major (1 Flat)
-    case 3: keyCenter = 'A';  isMinor = true;  useFlats = false; break; // A Minor (Natural)
-    case 4: keyCenter = 'D';  isMinor = true;  useFlats = true;  break; // D Minor (1 Flat)
-    case 5: keyCenter = 'D';  isMinor = false; useFlats = false; break; // D Major (2 Sharps)
-    case 6: keyCenter = 'Bb'; isMinor = false; useFlats = true;  break; // Bb Major (2 Flats - perfectly clean, no double flats)
-    case 7: keyCenter = 'E';  isMinor = true;  useFlats = false; break; // E Minor (1 Sharp)
-    default: keyCenter = 'C'; isMinor = false; useFlats = false;        // C Major Home Base
+    case 1: keyCenter = 'G';  isMinor = false; useFlats = false; break;
+    case 2: keyCenter = 'F';  isMinor = false; useFlats = true;  break;
+    case 3: keyCenter = 'A';  isMinor = true;  useFlats = false; break;
+    case 4: keyCenter = 'D';  isMinor = true;  useFlats = true;  break;
+    case 5: keyCenter = 'D';  isMinor = false; useFlats = false; break;
+    case 6: keyCenter = 'Bb'; isMinor = false; useFlats = true;  break;
+    case 7: keyCenter = 'E';  isMinor = true;  useFlats = false; break;
+    default: keyCenter = 'C'; isMinor = false; useFlats = false;
   }
 
   const rootMidi = PITCHES[keyCenter];
   
-  // Step 3: Determine scale intervals (Using traditional Major and Minor intervals)
+  // Scale intervals
   const scaleIntervals = isMinor 
-    ? Array(0, 2, 3, 5, 7, 8, 10) 
+    ? Array(0, 2, 3, 5, 7, 8, 11) 
     : Array(0, 2, 4, 5, 7, 9, 11);
 
-  // Choose a random rhythmic motif pattern
-  const activeRhythm = RHYTHMS.at(Math.floor(Math.random() * RHYTHMS.length));
-  const outputTokens = Array();
+  // Set up the local measure chord structure
+  const measureChordType = Math.floor(Math.random() * 3);
+  let chordDegrees = Array(0, 2, 4);
+  if (measureChordType === 1) chordDegrees = Array(3, 5, 0); 
+  if (measureChordType === 2) chordDegrees = Array(4, 6, 1); 
 
-  // Step 4: Map pitches to selected duration segments
+  // MACRO-STRUCTURAL CONTROLLER
+  // Measures 0-3:   Exposition (Balanced Themes & Sequence Transformations)
+  // Measures 4-7:   Adagio Section (Long, Broad, Sustained notes)
+  // Measures 8-11:  Presto Section (Dense, Hyper-Fast, Exploding 16/32 runs)
+  const macroSection = Math.floor(totalMeasures / 4) % 3;
+  const intraSectionIndex = totalMeasures % 4;
+
+  let activeRhythm = Array();
+  let computedDegrees = Array();
+
+  if (macroSection === 0) {
+    // ==========================================
+    // SECTION A: THEMATIC EXPOSITION & VARIATION
+    // ==========================================
+    if (intraSectionIndex === 0 || storedMotifDegrees === null) {
+      activeRhythm = RHYTHMS_BALANCED.at(Math.floor(Math.random() * RHYTHMS_BALANCED.length));
+      for (let i = 0; i < activeRhythm.length; i++) {
+        const duration = activeRhythm.at(i);
+        if (duration === 'h' || duration === 'q' || i === 0) {
+          computedDegrees.push(chordDegrees.at(i % chordDegrees.length));
+        } else {
+          computedDegrees.push(Math.floor(Math.random() * 7));
+        }
+      }
+      storedMotifRhythm = activeRhythm;
+      storedMotifDegrees = computedDegrees;
+    } else {
+      activeRhythm = storedMotifRhythm;
+      if (intraSectionIndex === 1) {
+        // Sequence transformation (shift up 2 steps)
+        for (let i = 0; i < storedMotifDegrees.length; i++) {
+          computedDegrees.push((storedMotifDegrees.at(i) + 2) % 7);
+        }
+      } else if (intraSectionIndex === 2) {
+        // Inversion transformation
+        let pivot = storedMotifDegrees.at(0);
+        for (let i = 0; i < storedMotifDegrees.length; i++) {
+          let diff = storedMotifDegrees.at(i) - pivot;
+          let inverted = pivot - diff;
+          if (inverted < 0) inverted += 7;
+          computedDegrees.push(inverted % 7);
+        }
+      } else {
+        // Direct thematic reuse decoration
+        for (let i = 0; i < storedMotifDegrees.length; i++) {
+          computedDegrees.push(storedMotifDegrees.at(i));
+        }
+      }
+    }
+
+  } else if (macroSection === 1) {
+    // ==========================================
+    // SECTION B: ADAGIO (Sustained, Long Notes)
+    // ==========================================
+    activeRhythm = RHYTHMS_SLOW.at(Math.floor(Math.random() * RHYTHMS_SLOW.length));
+    for (let i = 0; i < activeRhythm.length; i++) {
+      // Force structural arpeggiations across pure chord triad components
+      computedDegrees.push(chordDegrees.at(i % chordDegrees.length));
+    }
+
+  } else if (macroSection === 2) {
+    // ==========================================
+    // SECTION C: PRESTO (Fast Virtuosic Subdivisions)
+    // ==========================================
+    activeRhythm = RHYTHMS_FAST.at(Math.floor(Math.random() * RHYTHMS_FAST.length));
+    for (let i = 0; i < activeRhythm.length; i++) {
+      const duration = activeRhythm.at(i);
+      if (i === 0 || duration === 'e') {
+        // Anchor notes land safely on foundational chords
+        computedDegrees.push(chordDegrees.at(i % chordDegrees.length));
+      } else {
+        // Intermediate 16ths and 32nds dynamically map out running passing tones step-by-step
+        computedDegrees.push(Math.floor(Math.random() * 7));
+      }
+    }
+  }
+
+  // Step 4: Map final computed degrees into absolute pitches
+  const outputTokens = Array();
   for (let i = 0; i < activeRhythm.length; i++) {
     const duration = activeRhythm.at(i);
-    
-    // Tonic (0) -> Subdominant (1) -> Dominant (2) -> Passing Loop (3)
-    const currentFunction = i % 4;
-    let allowedScaleDegrees = Array(0, 2, 4); 
-
-    if (currentFunction === 1) {
-      allowedScaleDegrees = Array(3, 5, 0); 
-    } else if (currentFunction === 2) {
-      allowedScaleDegrees = Array(4, 6, 1); 
-    } else if (currentFunction === 3) {
-      allowedScaleDegrees = Array(0, 2, 6); 
-    }
-
-    // Convert scale degree registers to absolute half-step pitch arrays
-    const targetIntervals = Array();
-    for (let d = 0; d < allowedScaleDegrees.length; d++) {
-      targetIntervals.push(scaleIntervals.at(allowedScaleDegrees.at(d)));
-    }
+    const targetDegree = computedDegrees.at(i);
+    const targetInterval = scaleIntervals.at(targetDegree);
 
     let idealMidi = lastMidi;
     let closestDistance = Infinity;
 
-    // Search performance bubble (MIDI 55 to 79)
+    // Search framework performance bubble (MIDI 55 to 79)
     for (let candidate = 55; candidate <= 79; candidate++) {
       const pitchOffset = (candidate - rootMidi + 24) % 12;
       
-      if (targetIntervals.includes(pitchOffset)) {
+      if (pitchOffset === targetInterval) {
         const stepDistance = Math.abs(candidate - lastMidi);
-        
-        if (stepDistance < closestDistance && stepDistance > 0) {
+        if (stepDistance < closestDistance) {
           closestDistance = stepDistance;
           idealMidi = candidate;
         }
       }
     }
 
-    // Voice-leading voice jump damper
+    // Voice Leading Optimization Engine
+    // Broad notes (Adagio) are permitted structural leaps up to a full octave (12 semi-tones)
+    // Fast running notes (Presto engine) are strictly bound to conjunct step-wise motion (max 2 semitones)
+    const isFastNote = (duration === '16' || duration === '32');
+    const maxInterval = isFastNote ? 2 : 12;
     const intervalJump = Math.abs(idealMidi - lastMidi);
-    if (intervalJump > 7) {
-      const direction = idealMidi > lastMidi ? 3 : -3;
-      idealMidi = lastMidi + direction;
+    
+    if (intervalJump > maxInterval && intervalJump > 0) {
+      const direction = idealMidi > lastMidi ? 1 : -1;
+      idealMidi = lastMidi + (direction * 2);
+      while (((idealMidi - rootMidi + 24) % 12) !== targetInterval && idealMidi > 55 && idealMidi < 79) {
+        idealMidi += direction;
+      }
     }
 
     lastMidi = idealMidi;

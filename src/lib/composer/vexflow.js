@@ -1,19 +1,37 @@
 class EasyScore {
   constructor(f) { this.f = f; }
   notes(s, o = {}) {
-    return s.split(',').map(t => {
-      const [p, d] = t.trim().split('/');
-      const m = p.match(/([A-G])(#|b)?(\d+)/);
-      return { 
-        p, 
-        d: d || 'q', 
-        s: o.stem || 'auto', 
-        l: m ? m[1] : 'C', 
-        a: m && m[2] ? m[2] : '', 
-        o: m && m[3] ? parseInt(m[3], 10) : 4 
-      };
-    });
-  }
+  return s.split(',').map(t => {
+    const [p, rawD] = t.trim().split('/');
+    const dToken = rawD || 'q';
+
+    // 1. Intercept and flag dot token signatures
+    const isDotted = dToken.indexOf('.') !== -1 && dToken.indexOf('..') === -1;
+    const isDoubleDotted = dToken.indexOf('..') !== -1;
+
+    // 2. Clean duration token (removes the dots so 'e.', '16..', etc., become 'e', '16')
+    const d = dToken.replace(/\./g, '');
+
+    const isRest = p.toUpperCase().startsWith('R');
+    const m = !isRest ? p.match(/([A-G])(#|b)?(\d+)/) : null;
+
+    return { 
+      p, 
+      d: d, 
+      isRest,
+      isDotted,
+      isDoubleDotted,
+      s: o.stem || 'auto', 
+      l: m ? m[1] : 'B', 
+      a: m && m[2] ? m[2] : '', 
+      o: m && m[3] ? parseInt(m[3], 10) : 4 
+    };
+  });
+}
+
+  
+  
+  
   voice(n) { return { t: 'V', n }; }
 }
 
@@ -97,13 +115,18 @@ class Factory {
           sStr += `<line x1="${mEndX}" y1="${startY}" x2="${mEndX}" y2="${startY + (4 * step)}" stroke="#000000" stroke-width="1.5"/>`;
         }
 
-        stave.voices.forEach(v => {
+		
+		
+		
+		
+		
+	        stave.voices.forEach(v => {
           const len = v.n.length;
           if (!len) return;
           
           const space = (measureWidth - 25) / Math.max(1, len);
           
-          // Pre-calculate positions and track flag groupings for beaming purposes
+          // PHASE 1: INITIAL NOTE GEOMETRY EXTRACTION MAP
           const noteGeometries = v.n.map((n, idx) => {
             const nx = mStartX + 15 + (idx * space);
             const off = 34 - (n.o * 7 + M[n.l]);
@@ -113,39 +136,85 @@ class Factory {
             
             const dir = n.s === 'up' ? -1 : 1;
             const sx = nx + (n.s === 'up' ? 4.5 : -4.5);
-            const ey = ny + (dir * 26); // End coordinates of the note stem tip
+            let ey = ny + (dir * 26); // Default standalone stem length
             
-            return { n, idx, nx, ny, sx, ey, dir, itemColor, isNoteActive };
+            return { n, idx, nx, ny, sx, ey, dir, itemColor, isNoteActive, isBeamed: false };
           });
 
-          // Lookahead pass to combine adjacent eighth notes ('e') into structural beams
+          // PHASE 2: BEAMING LOOKAHEAD AND DYNAMIC SUB-BEAM SEGMENTATION
+     
+	 
+	 
+	          // PHASE 2: BEAMING LOOKAHEAD AND DYNAMIC SUB-BEAM SEGMENTATION
           let beamGroup = [];
-          
           for (let i = 0; i <= noteGeometries.length; i++) {
             const geom = noteGeometries[i];
             
-            // Check if current note item belongs in an eighth note beam sequence
-            if (geom && geom.n.d === 'e') {
+            // Check if the node is eligible for macro beaming (e, 16, or 32)
+            const canBeam = geom && !geom.n.isRest && (geom.n.d === 'e' || geom.n.d === '16' || geom.n.d === '32');
+            
+            if (canBeam) {
               beamGroup.push(geom);
             } else {
-              // Group has broken, render beam bar if 2 or more consecutive eighth notes exist
+              // SAFETY FIX 1: Absolutely guarantee we have at least 2 distinct notes to form a line segment
               if (beamGroup.length >= 2) {
                 const first = beamGroup[0];
                 const last = beamGroup[beamGroup.length - 1];
                 
-                // Draw connecting thick structural musical beam bar
-                sStr += `<polygon points="${first.sx},${first.ey} ${last.sx},${last.ey} ${last.sx},${last.ey + 3} ${first.sx},${first.ey + 3}" fill="${first.itemColor}"/>`;
+                // SAFETY FIX 2: Safeguard against identical horizontal values (division by zero)
+                const runDistance = last.sx - first.sx;
+                const slope = runDistance !== 0 ? (last.ey - first.ey) / runDistance : 0;
                 
-                // Flag beam assignment so standard loose hook drawings are bypassed below
-                beamGroup.forEach(bgItem => { bgItem.isBeamed = true; });
+                // Realign every single stem edge to target the boundary vector of the main beam line
+                beamGroup.forEach((bgItem) => {
+                  bgItem.isBeamed = true;
+                  const progressFactor = bgItem.sx - first.sx;
+                  bgItem.ey = first.ey + (slope * progressFactor);
+                });
+
+                // UNBROKEN PRIMARY BEAM (Layer 1 - runs continuously across the entire group)
+                sStr += `<polygon points="${first.sx},${first.ey} ${last.sx},${last.ey} ${last.sx},${last.ey + 3.5} ${first.sx},${first.ey + 3.5}" fill="${first.itemColor}"/>`;
+                
+                const beamDir = first.dir === -1 ? 1 : -1;
+                const beamGap = beamDir * 5; // 5px tracking distance between stacked parallel lines
+
+                // DETACHED SUB-BEAM SEGMENTATION PASS
+                for (let b = 0; b < beamGroup.length - 1; b++) {
+                  const curr = beamGroup[b];
+                  const next = beamGroup[b + 1];
+                  
+                  // Secondary Beam: Draws 16th lines exclusively if BOTH neighbouring notes require it
+                  const supports16 = (curr.n.d === '16' || curr.n.d === '32') && (next.n.d === '16' || next.n.d === '32');
+                  if (supports16) {
+                    const cy1 = curr.ey + beamGap;
+                    const ny1 = next.ey + beamGap;
+                    sStr += `<polygon points="${curr.sx},${cy1} ${next.sx},${ny1} ${next.sx},${ny1 + 3.5} ${curr.sx},${cy1 + 3.5}" fill="${first.itemColor}"/>`;
+                  }
+                  
+                  // Tertiary Beam: Draws 32nd lines exclusively if BOTH neighbouring notes require it
+                  const supports32 = (curr.n.d === '32' && next.n.d === '32');
+                  if (supports32) {
+                    const cy2 = curr.ey + (beamGap * 2);
+                    const ny2 = next.ey + (beamGap * 2);
+                    sStr += `<polygon points="${curr.sx},${cy2} ${next.sx},${ny2} ${next.sx},${ny2 + 3.5} ${curr.sx},${cy2 + 3.5}" fill="${first.itemColor}"/>`;
+                  }
+                }
+              } else if (beamGroup.length === 1) {
+                // SAFETY FIX 3: Reset individual notes back to un-beamed status so they can fallback to standard flags
+                beamGroup[0].isBeamed = false;
               }
-              beamGroup = []; // Reset sequence collector
+              beamGroup = [];
             }
           }
 
-          // Main rendering execution loop pass
+	 
+	 
+
+          // PHASE 3: MAIN VECTOR VECTOR PIPELINE RENDERING PASS
           noteGeometries.forEach((geom) => {
             const { n, nx, ny, sx, ey, dir, itemColor, isBeamed } = geom;
+
+            if (n.isRest) return;
 
             // Pixel-based ledger line layer
             if (ny >= staffBottomY + step) {
@@ -164,21 +233,65 @@ class Factory {
             }
             
             const hol = n.d === 'w' || n.d === 'h';
-            const innerFill = hol ? '#ffffff' : itemColor;
+            const innerFill = hol ? '#ffffff00' : itemColor;
             
             sStr += `<ellipse cx="${nx}" cy="${ny}" rx="5" ry="3.5" fill="${innerFill}" stroke="${itemColor}" stroke-width="2" transform="rotate(-20 ${nx} ${ny})"/>`;
             
             if (n.d !== 'w') {
-              // Draw the note stem line segment
+              // Draw the note stem line segment (terminates cleanly right at the primary beam boundary)
               sStr += `<line x1="${sx}" y1="${ny}" x2="${sx}" y2="${ey}" stroke="${itemColor}" stroke-width="1.5"/>`;
               
-              // Only render individual flags if note is an eighth note and NOT part of a beam group
-              if (n.d === 'e' && !isBeamed) {
-                sStr += `<line x1="${sx}" y1="${ey}" x2="${sx + 4}" y2="${ey - (dir * 8)}" stroke="${itemColor}" stroke-width="1.5"/>`;
+              if (!isBeamed) {
+                var vFlip = dir === -1 ? 1 : -1;
+
+                if (n.d === 'e') {
+                  sStr += `<path d="M ${sx} ${ey} c 9.5,${vFlip * 2.4} 5.1,${vFlip * 10.8} 4.2,${vFlip * 13.8} c 7.8,${vFlip * -10.7} -4.1,${vFlip * -15.1} -4.2,${vFlip * -21.6} z" fill="${itemColor}" fill-rule="evenodd"/>`;
+                } else if (n.d === '16') {
+                  sStr += `<path d="M ${sx} ${ey} c 9.5,${vFlip * 2.4} 5.1,${vFlip * 10.8} 4.2,${vFlip * 13.8} c 7.8,${vFlip * -10.7} -4.1,${vFlip * -15.1} -4.2,${vFlip * -21.6} z" fill="${itemColor}" fill-rule="evenodd"/>`;
+                  sStr += `<path d="M ${sx} ${ey - (dir * 5)} c 9.5,${vFlip * 2.4} 5.1,${vFlip * 10.8} 4.2,${vFlip * 13.8} c 7.8,${vFlip * -10.7} -4.1,${vFlip * -15.1} -4.2,${vFlip * -21.6} z" fill="${itemColor}" fill-rule="evenodd"/>`;
+                } else if (n.d === '32') {
+                  sStr += `<path d="M ${sx} ${ey} c 9.5,${vFlip * 2.4} 5.1,${vFlip * 10.8} 4.2,${vFlip * 13.8} c 7.8,${vFlip * -10.7} -4.1,${vFlip * -15.1} -4.2,${vFlip * -21.6} z" fill="${itemColor}" fill-rule="evenodd"/>`;
+                  sStr += `<path d="M ${sx} ${ey - (dir * 5)} c 9.5,${vFlip * 2.4} 5.1,${vFlip * 10.8} 4.2,${vFlip * 13.8} c 7.8,${vFlip * -10.7} -4.1,${vFlip * -15.1} -4.2,${vFlip * -21.6} z" fill="${itemColor}" fill-rule="evenodd"/>`;
+                  sStr += `<path d="M ${sx} ${ey - (dir * 10)} c 9.5,${vFlip * 2.4} 5.1,${vFlip * 10.8} 4.2,${vFlip * 13.8} c 7.8,${vFlip * -10.7} -4.1,${vFlip * -15.1} -4.2,${vFlip * -21.6} z" fill="${itemColor}" fill-rule="evenodd"/>`;
+                }
               }
             }
+			
+			
+		// DRAWING RHYTHMIC DOTS LAYER for dotted notes
+if (n.isDotted || n.isDoubleDotted) {
+  // Center the dot horizontally just to the right of the notehead or flag line
+  var dotX1 = nx + 10; 
+  var dotY = ny;
+
+  // Traditional Engraving Rule: If a notehead lands directly on a staff line,
+  // push the dot up slightly into the space so it remains readable
+  var distanceFromCenterLine = (ny - (sy + 2 * s)) / (s / 2);
+  var landsOnALine = Math.round(distanceFromCenterLine) % 2 === 0;
+  if (landsOnALine && !n.isRest) {
+    dotY -= 4; // Shift up into the upper white space channel
+  }
+
+  // Render the First Dot
+  sStr += `<circle cx="${dotX1}" cy="${dotY}" r="1.5" fill="${itemColor}"/>`;
+
+  // Render the Second Dot if double-dotted
+  if (n.isDoubleDotted) {
+    var dotX2 = dotX1 + 5; // Track 5px to the right of the first dot
+    sStr += `<circle cx="${dotX2}" cy="${dotY}" r="1.5" fill="${itemColor}"/>`;
+  }
+}
+
+			
+			
           });
         });
+
+
+
+
+
+
       });
       
       sStr += `</g>`;
